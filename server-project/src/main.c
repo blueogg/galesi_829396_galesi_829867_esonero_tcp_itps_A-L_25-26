@@ -70,16 +70,35 @@ int main(int argc, char *argv[]) {
 	return -1;
 	}
 
+	if(listen(my_socket, QUEUE_SIZE) < 0){
 
-	// TODO: Set socket to listen
-	// listen(...);
+		errorhandler("listen() fallito");
+		return -1;
+	}
 
-	// TODO: Implement connection acceptance loop
-	// while (1) {
-	//     int client_socket = accept(...);
-	//     // Handle client communication
-	//     closesocket(client_socket);
-	// }
+	struct sockaddr_in client_addres;
+	int client_socket;
+	int client_len;
+	printf("%s\n", "Attendo richieste. . .");
+	while (1) {
+	client_len = sizeof(client_addres);
+	if ((client_socket = accept(my_socket, (struct sockaddr
+	*)&client_addres, &client_len)) < 0) {
+	errorhandler("accept() failed.\n");
+	closesocket(client_socket);
+	clearwinsock();
+	return -1;
+	}
+
+
+
+
+
+	closesocket(client_socket):
+
+
+
+	}
 
 	printf("Server terminated.\n");
 
