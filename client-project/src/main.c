@@ -209,9 +209,7 @@ int main(int argc, char *argv[]) {
 
 		}
 
-		// TODO: Close socket
-		// closesocket(my_socket);
-
+		closesocket(my_socket);
 		clearwinsock();
 		return 0;
 
