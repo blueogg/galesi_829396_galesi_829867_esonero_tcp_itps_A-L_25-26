@@ -9,11 +9,13 @@
 
 #if defined WIN32
 #include <winsock.h>
+#include <ctype.h>
 #else
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <ctype.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>

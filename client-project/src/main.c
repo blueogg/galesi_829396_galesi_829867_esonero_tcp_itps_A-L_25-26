@@ -10,9 +10,11 @@
 #define MAXADDRLENGHT 16
 #if defined WIN32
 #include <winsock.h>
+#include <ctype.h>
 #else
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -160,8 +162,8 @@ int main(int argc, char *argv[]) {
 	weather_request_t* req = requestCreate(_richiesta);
     weather_response_t res;
 
-	send(my_socket, req, getreqsize(), 0);
-	recv(my_socket, &res, getressize(), 0);
+	send(my_socket, (void*)req, getreqsize(), 0);
+	recv(my_socket, (void*)&res, getressize(), 0);
 	printf("Ricevuto risultato dal server ip %s", inet_ntoa(server_addr.sin_addr));
 	if(res.status == 0){
 
