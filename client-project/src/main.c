@@ -6,7 +6,7 @@
  * This file contains the boilerplate code for a TCP client
  * portable across Windows, Linux and macOS.
  */
-#define MAXREQLENGHT 10
+#define MAXREQLENGHT 64
 #define MAXADDRLENGHT 16
 #if defined WIN32
 #include <winsock.h>
@@ -38,19 +38,28 @@ void clearwinsock() {
 #endif
 }
 
-
+struct weather_request_t;
 
 int main(int argc, char *argv[]) {
-
-	//OTTIENE VALORE PARAMETRI
 
 	char* richiesta = NULL;
 	long port = 0;
 	char* indirizzo = NULL;
-
+	int check = 0;
+	int counterR = 0;
 	for(int i = 1; i < argc; i++){
 
+
+		if((argv[i][0] == '-') && (argv[i][1] != 'r' && argv[i][1] != 's' && argv[i][1] != 'p')){
+
+			errorhandler("Flag non gestito");
+			errorhandler("client-project [-s server] [-p port] -r 'type city'");
+			return -1;
+		}
+
+
 		if(strcmp(argv[i], "-s") == 0){
+			check++;
 			indirizzo = malloc(MAXADDRLENGHT * sizeof(char));
 			strcpy(indirizzo, argv[i + 1]);
 
@@ -60,19 +69,36 @@ int main(int argc, char *argv[]) {
 
 		}
 
-		if(strcmp(argv[i], "-t") == 0){
+		if(strcmp(argv[i], "-r") == 0){
+			counterR++;
 			richiesta = malloc(MAXREQLENGHT * sizeof(char));
 			strcpy(richiesta, argv[i  + 1]);
 		}
 
 	}
 
+	if(check != 0){
+		check = inet_addr(indirizzo);
+		if(check == INADDR_NONE){
+		errorhandler("Indirizzo in formato non valido");
+		return -1;
+		}
+	}
 
 
+	if(counterR == 0) { errorhandler("Il parametro -r e' obbligatorio"); return -1;}
+
+	char _richiesta[MAXREQLENGHT];
+	strcpy(_richiesta, richiesta);
+	if(_richiesta[0] != 't' && _richiesta[0] != 'h' && _richiesta[0] != 'w' && _richiesta[0] != 'p' )
+	{
+		errorhandler("Richiesta non valida");
+        // Aggiungere l'uscita qui per rispettare i requisiti
+        return -1;
+	}
 
 
 #if defined WIN32
-	// Initialize Winsock
 	WSADATA wsa_data;
 	int result = WSAStartup(MAKEWORD(2,2), &wsa_data);
 	if (result != NO_ERROR) {
@@ -82,15 +108,19 @@ int main(int argc, char *argv[]) {
 #endif
 
 	int my_socket;
-	memset(&my_socket, 0, sizeof(my_socket));
 	my_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if(my_socket < 0) errorhandler("Creaziones socket fallita");
+
 	struct sockaddr_in server_addr;
 	server_addr.sin_family = AF_INET;
-	server_addr.sin_addr.S_un.S_addr = indirizzo == NULL ? inet_addr("127.0.0.1") : inet_addr(indirizzo);
-	server_addr.sin_port = port == 0 ? htons(SERVER_PORT) : htons(port);
 
-	if(connect(my_socket, (struct sockaddr*)&server_addr, sizeof(server_addr) < 0)){
+    const char *ip_to_use = (indirizzo == NULL) ? "127.0.0.1" : indirizzo;
+    server_addr.sin_addr.s_addr = inet_addr(ip_to_use);
+
+	server_addr.sin_port = port == 0 ? htons(SERVER_PORT) : htons(port);
+	puts("a");
+
+	if(connect(my_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
 
 		errorhandler("connect() fallito");
 		closesocket(my_socket);
@@ -99,12 +129,13 @@ int main(int argc, char *argv[]) {
 
 	}
 
+	weather_request_t* req = requestCreate(_richiesta);
+	send(my_socket, req, getreqsize(), 0);
+	weather_response_t* res;
+	recv(my_socket, res, getressize(), 0);
 
 
 
-	// TODO: Implement communication logic
-	// send(...);
-	// recv(...);
 
 	// TODO: Close socket
 	// closesocket(my_socket);
@@ -113,4 +144,4 @@ int main(int argc, char *argv[]) {
 
 	clearwinsock();
 	return 0;
-} // main end
+}

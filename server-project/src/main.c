@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 	int my_socket;
-	my_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
+	my_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (my_socket < 0) {
 	errorhandler("Creazione socket fallita");
 	clearwinsock();
@@ -60,8 +60,7 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in server_addr;
 	server_addr.sin_family = AF_INET;
 	server_addr.sin_port = htons(SERVER_PORT);
-	server_addr.sin_addr.s_addr = INADDR_ANY;
-	memset(&server_addr, 0, sizeof(server_addr));
+	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
 	if (bind(my_socket, (struct sockaddr*) &server_addr, sizeof(server_addr)) < 0) {
 	errorhandler("bind() failed");
@@ -80,24 +79,19 @@ int main(int argc, char *argv[]) {
 	int client_socket;
 	int client_len;
 	printf("%s\n", "Attendo richieste. . .");
+
 	while (1) {
-	client_len = sizeof(client_addres);
-	if ((client_socket = accept(my_socket, (struct sockaddr
-	*)&client_addres, &client_len)) < 0) {
-	errorhandler("accept() failed.\n");
-	closesocket(client_socket);
-	clearwinsock();
-	return -1;
-	}
+		client_len = sizeof(client_addres);
+		if ((client_socket = accept(my_socket, (struct sockaddr *)&client_addres, &client_len)) < 0) {
+			errorhandler("accept() failed.\n");
+			closesocket(client_socket);
+			continue;
+		}
 
+		puts("test");
+		// TODO: Implement server logic here (recv, process, send)
 
-
-
-
-	closesocket(client_socket):
-
-
-
+		closesocket(client_socket);
 	}
 
 	printf("Server terminated.\n");
@@ -105,6 +99,4 @@ int main(int argc, char *argv[]) {
 	closesocket(my_socket);
 	clearwinsock();
 	return 0;
-	}
-
-// main end
+}
