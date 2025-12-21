@@ -1,14 +1,22 @@
 /*
  * protocol.h
  *
- * Client header file
- * Definitions, constants and function prototypes for the client
+ * Header file comune per Client e Server UDP
  */
 
 #ifndef PROTOCOL_H_
 #define PROTOCOL_H_
 
-#define SERVER_PORT 27015
+#if defined WIN32
+#include <winsock2.h>
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#endif
+
+#define SERVER_PORT 56700
 #define BUFFER_SIZE 512
 
 #define STATUS_OK 0
@@ -25,10 +33,5 @@ typedef struct {
     char type;
     float value;
 } weather_response_t;
-
-weather_request_t* requestCreate(const char richiesta[]);
-size_t getreqsize(void);
-size_t getressize(void);
-void printarray(const char a[]);
 
 #endif /* PROTOCOL_H_ */

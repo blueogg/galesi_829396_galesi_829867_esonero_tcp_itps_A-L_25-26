@@ -1,24 +1,22 @@
 /*
- * main.c
+ * server.c
  *
- * TCP Server - Template for Computer Networks assignment
- *
- * This file contains the boilerplate code for a TCP server
- * portable across Windows, Linux and macOS.
+ * UDP Server - Meteo Service
  */
 
 #if defined WIN32
-#include <winsock.h>
-#include <ctype.h>
+#include <winsock2.h>
+#include <stdint.h>
 #else
 #include <string.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <ctype.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include <ctype.h>
 #define closesocket close
 #endif
 
@@ -32,21 +30,12 @@
 void errorhandler(char* errormessage){
 	printf("%s\n", errormessage);
 }
+
 void clearwinsock() {
 #if defined WIN32
 	WSACleanup();
 #endif
 }
-
-size_t getreqsize(){
-	return sizeof(weather_request_t);
-}
-
-size_t getressize(){
-	return sizeof(weather_request_t);
-}
-
-#include <stdlib.h>
 
 float get_temperature(void) {
     float range_min = -10.0f;
@@ -71,139 +60,140 @@ float get_pressure(void) {
     return ( (float)rand() / RAND_MAX ) * range_size + range_min;
 }
 
-
-weather_response_t processReq(weather_request_t* req, struct sockaddr_in client){
-
-	weather_response_t res;
-    res.status = 0;
-    res.type = '\0';
-    res.value = 0.0f;
-
-	printf("%s '%c ", "Richiesta", req->type);
-	int i = 0;
-	char nome[64] = {};
-	while( req->city[i] != '\0'){
-		nome[i] = req->city[i];
-		nome[i] = tolower(nome[i]);
-		printf("%c", req->city[i] );
-		i++;
-
-	}
-
-	printf("' dal client ip %s\n", inet_ntoa(client.sin_addr));
-
-	int status = 0;
-	if(req->type != 't' && req->type != 'h' && req->type != 'w' && req->type != 'p'){
-
-		status = 2;
-		res.status = status;
-		res.type = req->type;
-		return res;
-
-	}
-	const char* lista[] = { "bari", "roma", "milano", "napoli", "torino", "palermo", "genova", "bologna", "firenze", "venezia"};
-	int _check;
-	int check = 0;
-	for(int i = 0; i < 10; i++){
-		_check = strcmp(nome, lista[i]);
-		if(_check == 0){
-			check++;
-			break;
-		}
-
-	}
-
-	if(check == 0){
-
-		status = 1;
-		res.status = status;
-		res.type = req->type;
-		return res;
-
-	}
-
-    res.type = req->type;
-
-    switch(req->type) {
-        case 't': res.value = get_temperature(); break;
-        case 'h': res.value = get_humidity(); break;
-        case 'w': res.value = get_wind(); break;
-        case 'p': res.value = get_pressure(); break;
-    }
-
-	return res;
-}
-
 int main(int argc, char *argv[]) {
 
-    srand(time(NULL));
-    int port = 0;
+    srand((unsigned int)time(NULL));
+    int port = SERVER_PORT;
+
     for(int i = 1; i < argc; i++){
-
-		if((argv[i][0] == '-') && argv[i][1] != 'p'){
-			errorhandler("Flag non gestito");
-			errorhandler("server-project [-p port]");
-			return -1;
-		}
-
-		if(strcmp(argv[i], "-p") == 0){
-		port = strtol(argv[i + 1], NULL, 10);
-		}
+		if(strcmp(argv[i], "-p") == 0 && i + 1 < argc){
+		    port = strtol(argv[i + 1], NULL, 10);
+            i++;
+		} else {
+            printf("Usage: %s [-p port]\n", argv[0]);
+            return -1;
+        }
     }
-
 
 #if defined WIN32
 	WSADATA wsa_data;
 	int result = WSAStartup(MAKEWORD(2,2), &wsa_data);
 	if (result != NO_ERROR) {
-		printf("Error at WSAStartup()");
+		printf("Error at WSAStartup()\n");
 		return 0;
 	}
 #endif
 
 	int my_socket;
-	my_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	my_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	if (my_socket < 0) {
-	errorhandler("Creazione socket fallita");
-	clearwinsock();
-	return -1;
+	    errorhandler("Creazione socket fallita");
+	    clearwinsock();
+	    return -1;
 	}
+
 	struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = port == 0 ? htons(SERVER_PORT) : htons(port);
-	server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	server_addr.sin_port = htons(port);
+	server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	if (bind(my_socket, (struct sockaddr*) &server_addr, sizeof(server_addr)) < 0) {
-	errorhandler("bind() failed");
-	closesocket(my_socket);
-	clearwinsock();
-	return -1;
+	    errorhandler("bind() failed");
+	    closesocket(my_socket);
+	    clearwinsock();
+	    return -1;
 	}
 
-	if(listen(my_socket, QUEUE_SIZE) < 0){
+    printf("Server UDP in ascolto sulla porta %d\n", port);
 
-		errorhandler("listen() fallito");
-		return -1;
-	}
+	struct sockaddr_in client_addr;
+	int lungh_client;
+    char buffer_rx[BUFFER_SIZE];
 
-	struct sockaddr_in client_addres;
-	int client_socket;
-	int client_len;
 	while (1) {
-		client_len = sizeof(client_addres);
-		if ((client_socket = accept(my_socket, (struct sockaddr *)&client_addres, &client_len)) < 0) {
-			errorhandler("accept() failed.\n");
-			closesocket(client_socket);
+		lungh_client = sizeof(client_addr);
+        memset(buffer_rx, 0, BUFFER_SIZE);
+
+		int bytes_ricevuti = recvfrom(my_socket, buffer_rx, BUFFER_SIZE, 0, (struct sockaddr *)&client_addr, &lungh_client);
+        if (bytes_ricevuti < 0) {
+			errorhandler("recvfrom() failed.\n");
 			continue;
 		}
 
 		weather_request_t req;
-        weather_response_t res;
-        recv(client_socket, (void*)&req, getreqsize(), 0);
-		res = processReq(&req, client_addres);
-        send(client_socket, (const void*)&res, getressize(), 0);
+        req.type = buffer_rx[0];
 
-		closesocket(client_socket);
+        int lungh_citta = bytes_ricevuti - 1;
+        if (lungh_citta > 63) lungh_citta = 63;
+        if (lungh_citta < 0) lungh_citta = 0;
+        memcpy(req.city, buffer_rx + 1, lungh_citta);
+        req.city[lungh_citta] = '\0';
+
+        char* ip_cliente_str = inet_ntoa(client_addr.sin_addr);
+        struct hostent* he_cliente = gethostbyaddr((const char*)&client_addr.sin_addr, sizeof(client_addr.sin_addr), AF_INET);
+        char* nome_host_cliente;
+
+        if (he_cliente != NULL) {
+            nome_host_cliente = he_cliente->h_name;
+        } else {
+            nome_host_cliente = ip_cliente_str;
+        }
+
+        printf("Richiesta ricevuta da %s (ip %s): type='%c', city='%s'\n", nome_host_cliente, ip_cliente_str, req.type, req.city);
+
+		weather_response_t res;
+        res.status = STATUS_OK;
+        res.type = req.type;
+        res.value = 0.0f;
+
+        if(req.type != 't' && req.type != 'h' && req.type != 'w' && req.type != 'p'){
+            res.status = STATUS_INVALID_REQUEST;
+        } else {
+            const char* lista[] = { "bari", "roma", "milano", "napoli", "torino", "palermo", "genova", "bologna", "firenze", "venezia"};
+            int trovato = 0;
+            char nome_citta_lower[64];
+            strncpy(nome_citta_lower, req.city, 63);
+            nome_citta_lower[63] = '\0';
+
+            for(int k=0; nome_citta_lower[k]; k++) nome_citta_lower[k] = tolower(nome_citta_lower[k]);
+
+            for(int i = 0; i < 10; i++){
+                if(strcmp(nome_citta_lower, lista[i]) == 0){
+                    trovato = 1;
+                    break;
+                }
+            }
+
+            if(!trovato){
+                res.status = STATUS_CITY_NOT_FOUND;
+            } else {
+                switch(req.type) {
+                    case 't': res.value = get_temperature(); break;
+                    case 'h': res.value = get_humidity(); break;
+                    case 'w': res.value = get_wind(); break;
+                    case 'p': res.value = get_pressure(); break;
+                }
+            }
+        }
+
+        char buffer_tx[BUFFER_SIZE];
+        int cursore = 0;
+
+        uint32_t stato_rete = htonl(res.status);
+        memcpy(buffer_tx + cursore, &stato_rete, sizeof(uint32_t));
+        cursore += sizeof(uint32_t);
+
+        memcpy(buffer_tx + cursore, &res.type, sizeof(char));
+        cursore += sizeof(char);
+
+        uint32_t valore_temp;
+        memcpy(&valore_temp, &res.value, sizeof(float));
+        valore_temp = htonl(valore_temp);
+        memcpy(buffer_tx + cursore, &valore_temp, sizeof(uint32_t));
+        cursore += sizeof(uint32_t);
+
+        sendto(my_socket, buffer_tx, cursore, 0, (struct sockaddr*)&client_addr, lungh_client);
 	}
 
 	closesocket(my_socket);

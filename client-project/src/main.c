@@ -1,18 +1,18 @@
 /*
- * main.c
+ * client.c
  *
- * TCP Client - Template for Computer Networks assignment
- *
- * This file contains the boilerplate code for a TCP client
- * portable across Windows, Linux and macOS.
+ * UDP Client - Meteo Service
  */
-#define MAXREQLENGHT 64
-#define MAXADDRLENGHT 16
+
+#define MAXREQLENGHT 128
+#define MAXADDRLENGHT 256
+
 #if defined WIN32
-#include <winsock.h>
-#include <ctype.h>
+#include <winsock2.h>
+#include <stdint.h>
 #else
 #include <string.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <ctype.h>
 #include <sys/types.h>
@@ -39,97 +39,75 @@ void clearwinsock() {
 #endif
 }
 
-void printarray(const char a[]){
-int i = 0;
-	while(a[i] != '\0'){
-		if(i == 0) { printf(". %c", toupper(a[i])); i++;
-		}else {
-		printf("%c", tolower(a[i]));
-		i++;
+void stampa_citta_formattata(const char* citta){
+    int i = 0;
+	while(citta[i] != '\0'){
+		if(i == 0) {
+            printf("%c", toupper(citta[i]));
+        } else {
+		    printf("%c", tolower(citta[i]));
 		}
+        i++;
 	}
 }
-
-weather_request_t* requestCreate(const char richiesta[]){
-	weather_request_t* req = (weather_request_t*)malloc(sizeof(weather_request_t));
-
-	req->type = richiesta[0];
-
-	int i  = 2;
-	int j = 0;
-	char nome[64] = {};
-	while(richiesta[i] != '\0'){
-		nome[j] = richiesta[i];
-		i++;
-		j++;
-	}
-	strcpy(req->city, nome);
-
-	return req;
-}
-
-size_t getreqsize(void){
-	return sizeof(weather_request_t);
-}
-
-size_t getressize(void){
-	return sizeof(weather_response_t);
-}
-
 
 int main(int argc, char *argv[]) {
 
-	char* richiesta = NULL;
-	long port = 0;
-	char* indirizzo = NULL;
-	int check = 0;
-	int counterR = 0;
+	char* indirizzo_server = "localhost";
+	long port = SERVER_PORT;
+	char* richiesta_input = NULL;
 
 	for(int i = 1; i < argc; i++){
-
-
-		if((argv[i][0] == '-') && (argv[i][1] != 'r' && argv[i][1] != 's' && argv[i][1] != 'p')){
-
-			errorhandler("Flag non gestito");
-			errorhandler("client-project [-s server] [-p port] -r 'type city'");
-			return -1;
+		if(strcmp(argv[i], "-s") == 0 && i + 1 < argc){
+			indirizzo_server = argv[i + 1];
+            i++;
 		}
-
-
-		if(strcmp(argv[i], "-s") == 0){
-			check++;
-			indirizzo = malloc(MAXADDRLENGHT * sizeof(char));
-			strcpy(indirizzo, argv[i + 1]);
-
+		else if(strcmp(argv[i], "-p") == 0 && i + 1 < argc){
+		    port = strtol(argv[i + 1], NULL, 10);
+            i++;
 		}
-		if(strcmp(argv[i], "-p") == 0){
-		port = strtol(argv[i + 1], NULL, 10);
-
-		}
-
-		if(strcmp(argv[i], "-r") == 0){
-			counterR++;
-			richiesta = malloc(MAXREQLENGHT * sizeof(char));
-			strcpy(richiesta, argv[i  + 1]);
-		}
-
-	}
-
-
-	if(port < 0 || port > 65535) errorhandler("Porta non valida");
-	if(check != 0){
-		check = inet_addr(indirizzo);
-		if(check == INADDR_NONE){
-		errorhandler("Indirizzo in formato non valido");
-		return -1;
+		else if(strcmp(argv[i], "-r") == 0 && i + 1 < argc){
+			richiesta_input = argv[i  + 1];
+            i++;
 		}
 	}
-	if(counterR == 0) { errorhandler("Il parametro -r e' obbligatorio"); return -1;}
 
-	char _richiesta[MAXREQLENGHT];
-	strcpy(_richiesta, richiesta);
+	if(richiesta_input == NULL) {
+        errorhandler("Il parametro -r e' obbligatorio");
+        return -1;
+    }
 
+    char tipo_richiesto = '\0';
+    char nome_citta[64] = {0};
 
+    if (strchr(richiesta_input, '\t') != NULL) {
+        errorhandler("Errore: La richiesta contiene caratteri di tabulazione non ammessi.");
+        return -1;
+    }
+
+    char* primo_spazio = strchr(richiesta_input, ' ');
+    if (primo_spazio == NULL) {
+        errorhandler("Errore: Formato richiesta invalido. Usare \"type city\".");
+        return -1;
+    }
+
+    int len_tipo = primo_spazio - richiesta_input;
+    if (len_tipo != 1) {
+        errorhandler("Errore: Il tipo richiesta deve essere un singolo carattere.");
+        return -1;
+    }
+    tipo_richiesto = richiesta_input[0];
+
+    char* inizio_citta = primo_spazio + 1;
+    if (strlen(inizio_citta) >= 64) {
+         errorhandler("Errore: Nome citta' troppo lungo (max 63 caratteri).");
+         return -1;
+    }
+    strcpy(nome_citta, inizio_citta);
+    if (strlen(nome_citta) == 0) {
+        errorhandler("Errore: Nome citta' mancante.");
+        return -1;
+    }
 
 #if defined WIN32
 	WSADATA wsa_data;
@@ -141,86 +119,114 @@ int main(int argc, char *argv[]) {
 #endif
 
 	int my_socket;
-	my_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if(my_socket < 0) {errorhandler("Creaziones socket fallita"); clearwinsock(); return -1;}
+	my_socket = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	if(my_socket < 0) {
+        errorhandler("Creazione socket fallita");
+        clearwinsock();
+        return -1;
+    }
 
 	struct sockaddr_in server_addr;
+    memset(&server_addr, 0, sizeof(server_addr));
 	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(port);
 
-    const char *ip_to_use = (indirizzo == NULL) ? "127.0.0.1" : indirizzo;
-    server_addr.sin_addr.s_addr = inet_addr(ip_to_use);
+    struct hostent *he_destinazione;
+    if ((he_destinazione = gethostbyname(indirizzo_server)) == NULL) {
+        errorhandler("Risoluzione host fallita");
+        closesocket(my_socket);
+        clearwinsock();
+        return -1;
+    }
+    memcpy(&server_addr.sin_addr, he_destinazione->h_addr_list[0], he_destinazione->h_length);
 
-	server_addr.sin_port = port == 0 ? htons(SERVER_PORT) : htons(port);
+    char buffer_tx[BUFFER_SIZE];
+    buffer_tx[0] = tipo_richiesto;
+    strcpy(buffer_tx + 1, nome_citta);
+    int dim_richiesta = 1 + strlen(nome_citta) + 1;
 
-	if(connect(my_socket, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
-		errorhandler("connect() fallito");
+	if(sendto(my_socket, buffer_tx, dim_richiesta, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
+		errorhandler("sendto() fallito");
 		closesocket(my_socket);
 		clearwinsock();
 		return -1;
 	}
 
-	weather_request_t* req = requestCreate(_richiesta);
-    weather_response_t res;
+    char buffer_rx[BUFFER_SIZE];
+    struct sockaddr_in addr_mittente;
+    int len_mittente = sizeof(addr_mittente);
 
-	send(my_socket, (void*)req, getreqsize(), 0);
-	recv(my_socket, (void*)&res, getressize(), 0);
-	printf("Ricevuto risultato dal server ip %s", inet_ntoa(server_addr.sin_addr));
-	if(res.status == 0){
-
-		int i  = 2;
-		int j = 0;
-		char nome[64];
-		while(richiesta[i] != '\0'){
-			nome[j] = richiesta[i];
-			i++;
-			j++;
-		}
-
-		switch(res.type){
-
-		case 't':
-			printarray(nome);
-			printf(": Temperatura = %.1f°C\n", res.value);
-				break;
-
-		case 'h':
-			printarray(nome);
-			printf(": Umidità = %.1f%c\n", res.value, 37);
-
-			break;
-		case 'w':
-			printarray(nome);
-			printf(": Vento = %.1fkm/h\n", res.value);
-
-			break;
-		case 'p':
-			printarray(nome);
-			printf(": Pressione = %.1fhPa\n", res.value);
-
-			break;
-		}
-		}
-		if(res.status == 1){
-
-			errorhandler(". Città non disponibile");
-				return -1;
-		}
-
-		if(res.status == 2){
-			errorhandler(". Richiesta non valida");
-
-		}
-
+	int dim_risposta = recvfrom(my_socket, buffer_rx, BUFFER_SIZE, 0, (struct sockaddr*)&addr_mittente, &len_mittente);
+    if(dim_risposta < 0){
+        errorhandler("recvfrom() fallito");
 		closesocket(my_socket);
 		clearwinsock();
-		return 0;
+		return -1;
+    }
 
+    if (dim_risposta < 9) {
+        errorhandler("Risposta non valida (troppo corta).");
+        closesocket(my_socket);
+        clearwinsock();
+        return -1;
+    }
 
-	}
+    int cursore = 0;
 
+    uint32_t stato_rete;
+    memcpy(&stato_rete, buffer_rx + cursore, sizeof(uint32_t));
+    unsigned int stato = ntohl(stato_rete);
+    cursore += sizeof(uint32_t);
 
+    char tipo_risp;
+    memcpy(&tipo_risp, buffer_rx + cursore, sizeof(char));
+    cursore += sizeof(char);
 
+    uint32_t val_rete;
+    float valore;
+    memcpy(&val_rete, buffer_rx + cursore, sizeof(uint32_t));
+    val_rete = ntohl(val_rete);
+    memcpy(&valore, &val_rete, sizeof(float));
+    cursore += sizeof(uint32_t);
 
+    char* ip_mittente_str = inet_ntoa(addr_mittente.sin_addr);
+    struct hostent* he_mittente = gethostbyaddr((const char*)&addr_mittente.sin_addr, sizeof(addr_mittente.sin_addr), AF_INET);
+    char* nome_host_mittente;
 
+    if (he_mittente != NULL) {
+        nome_host_mittente = he_mittente->h_name;
+    } else {
+        nome_host_mittente = ip_mittente_str;
+    }
 
+	printf("Ricevuto risultato dal server %s (ip %s). ", nome_host_mittente, ip_mittente_str);
 
+	if(stato == STATUS_OK){
+		stampa_citta_formattata(nome_citta);
+		switch(tipo_risp){
+		case 't':
+			printf(": Temperatura = %.1f°C\n", valore);
+			break;
+		case 'h':
+			printf(": Umidità = %.1f%c\n", valore, 37);
+			break;
+		case 'w':
+			printf(": Vento = %.1f km/h\n", valore);
+			break;
+		case 'p':
+			printf(": Pressione = %.1f hPa\n", valore);
+			break;
+        default:
+            printf(": Tipo dato sconosciuto\n");
+            break;
+		}
+    } else if(stato == 1){
+        printf("Città non disponibile\n");
+    } else if(stato == 2){
+        printf("Richiesta non valida\n");
+    }
+
+    closesocket(my_socket);
+    clearwinsock();
+    return 0;
+}
