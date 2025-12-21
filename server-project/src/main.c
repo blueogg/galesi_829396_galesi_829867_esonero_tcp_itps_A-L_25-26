@@ -1,11 +1,15 @@
 /*
- * server.c
+ * main.c
  *
- * UDP Server - Meteo Service
+ * UDP Server - Template for Computer Networks assignment
+ *
+ * This file contains the boilerplate code for a UDP server
+ * portable across Windows, Linux, and macOS.
  */
 
+
 #if defined WIN32
-#include <winsock2.h>
+#include <winsock.h>
 #include <stdint.h>
 #else
 #include <string.h>

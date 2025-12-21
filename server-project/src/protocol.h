@@ -8,7 +8,7 @@
 #define PROTOCOL_H_
 
 #if defined WIN32
-#include <winsock2.h>
+#include <winsock.h>
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>

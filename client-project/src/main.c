@@ -1,7 +1,10 @@
 /*
- * client.c
+ * main.c
  *
- * UDP Client - Meteo Service
+ * UDP Client - Template for Computer Networks assignment
+ *
+ * This file contains the boilerplate code for a UDP client
+ * portable across Windows, Linux, and macOS.
  */
 
 #define MAXREQLENGHT 128
